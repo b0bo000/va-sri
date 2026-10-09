@@ -140,7 +140,7 @@ ZH = {"Method": "方法", "Variant": "变体", "Dataset": "数据集", "Input": 
       "Raw MSE": "原尺度 MSE", "Raw MAE": "原尺度 MAE",
       "w/o visibility bias": "去掉可见性偏置", "w/o variable identity": "去掉变量身份",
       "w/o joint pretraining": "去掉联合预训练", "VA-SRI (full)": "VA-SRI（完整）",
-      "Joint-channel encoder": "联合通道编码器", "Original recipe": "原配方", "Our recipe": "本文配方", "shared gap": "共享缺口", "partial": "部分共享", "mixed": "混合", "independent gaps": "独立缺口", "12 steps": "12 步", "24 steps": "24 步", "48 steps": "48 步", "Std.": "标准化", "Orig.": "原尺度", "Params": "参数量", "Learning rate": "学习率", "Recipe": "配方", "Loss": "损失", "Selected": "选定", "Seeds": "种子", "Variable": "变量", "Var. (\\%)": "方差（\\%）", "Wins": "胜出", "Model": "模型", "original": "原配方", "ours": "本文配方", "Train (min)": "训练（分钟）", " (7 variables)": "（7 个变量）", " (21 variables)": "（21 个变量）",
+      "Joint-channel encoder": "联合通道编码器", "Original recipe": "原配方", "Our recipe": "本文配方", "shared gap": "共享缺口", "partial": "部分共享", "mixed": "混合", "independent gaps": "独立缺口", "12 steps": "12 步", "24 steps": "24 步", "48 steps": "48 步", "Std.": "标准化", "Orig.": "原尺度", "Params": "参数量", "Learning rate": "学习率", "Recipe": "配方", "Loss": "损失", "Selected": "选定", "Seeds": "种子", "Skel.": "骨架", "Rem.": "消除", "Mean": "均值", "Median": "中位数", "Max": "最大值", "Seed corr.": "种子相关", "Off-diagonal": "非对角", "Diagonal": "对角", "Variable": "变量", "Var. (\\%)": "方差（\\%）", "Wins": "胜出", "Model": "模型", "original": "原配方", "ours": "本文配方", "Train (min)": "训练（分钟）", " (7 variables)": "（7 个变量）", " (21 variables)": "（21 个变量）",
       "VA-SRI, same loss": "VA-SRI·相同损失", "SAITS-blocksup, MAE loss": "SAITS-blocksup·MAE 损失", "TimesNet": "TimesNet", "Crossformer": "Crossformer",
       "Method": "方法", "Std. MSE": "标准化 MSE", "Std. MAE": "标准化 MAE", "Linear interpolation": "线性插值"}
 
@@ -156,6 +156,8 @@ CN = {"Imputation error with 24-step gaps (masked MSE).": "缺口长度为 24 �
       "Other missingness patterns and a wide dataset.": "其他缺失模式与高维数据集。",
       "Skeleton input and residual output.": "骨架输入与残差输出。",
       "Model size and training time.": "模型规模与训练时间。",
+      "Error of the skeleton and of VA-SRI by gap length.": "不同缺口长度下骨架与 VA-SRI 的误差。",
+      "Learned visibility bias.": "学习得到的可见性偏置。",
       "Tuning candidates and their validation error.": "调参候选及其验证误差。",
       "Per-variable error on ETTh1 and ETTm1.": "ETTh1 与 ETTm1 上的逐变量误差。",
       "Standardized masked MSE, mean $\\pm$ SD.": "标准化掩码 MSE（均值 $\\pm$ 标准差）。",
@@ -770,7 +772,51 @@ def pervar_table():
     table("pervar", "Per-variable error on ETTh1 and ETTm1.", "tab:pervar", hdr, rows, note, "@{}l" + "ccccc" * 2 + "@{}", size=9.5, colsep=3.5)
 
 
-COMPACT = (hyper_table, pervar_table, main_compact, length_compact, pattern_compact, factorial_compact, ablation_compact, cost_table)
+def energy_table():
+    """Residual target energy (scripts/va_sri/residual_energy.py) and VA-SRI test error, seed 42."""
+    e = json.loads((FIN / "skeleton_energy.json").read_text())
+    tags = {12: "_f2_b12", 24: "_final2", 48: "_f2_b48"}
+    rows = []
+    for d in DS:
+        cells = [f"{e[NAME[d]]['24'][1]:.3f}"]
+        for bl in (12, 24, 48):
+            sk = e[NAME[d]][str(bl)][0]
+            v = json.loads((RUNS / f"ft_{d}_s42_pre_p2ett_s42_beta_g{tags[bl]}" / "result.json").read_text())["test"]["std_mse"]
+            cells += [f"{sk:.3f}", f"{v:.3f}", f"{100 * (1 - v / sk):.0f}"]
+            MAC[f"energyRemoved{NAME[d]}{'BShort' if bl == 12 else 'BMid' if bl == 24 else 'BLong'}"] = f"{100 * (1 - v / sk):.0f}"
+        rows.append(f"{NAME[d]} & " + " & ".join(cells) + " \\\\")
+    hdr = ("& & \\multicolumn{3}{c}{12 steps} & \\multicolumn{3}{c}{24 steps} & \\multicolumn{3}{c}{48 steps} \\\\\n"
+           "\\cmidrule(lr){3-5}\\cmidrule(lr){6-8}\\cmidrule(lr){9-11}\n"
+           "Dataset & Mean & Skel. & VA-SRI & Rem. & Skel. & VA-SRI & Rem. & Skel. & VA-SRI & Rem.")
+    note = ("Standardized test MSE with the seed-42 masks. \\emph{Mean}: predicting the training mean (24-step gaps; the "
+            "value hardly depends on the gap length); \\emph{Skel.}: the skeleton; \\emph{Rem.}: share of the "
+            "skeleton's error removed by VA-SRI (\\%).")
+    CN_NOTE["energy"] = ("标准化测试 MSE，seed 42 的掩码。\\emph{均值}：预测训练均值（24 步缺口；该值几乎不随缺口长度变化）；"
+                         "\\emph{骨架}：骨架本身；\\emph{消除}：VA-SRI 消除的骨架误差比例（\\%）。")
+    table("energy", "Error of the skeleton and of VA-SRI by gap length.", "tab:energy", hdr, rows, note,
+          "@{}lc" + "ccc" * 3 + "@{}", size=9.5, colsep=3)
+
+
+def vga_table():
+    """Learned visibility bias (scripts/va_sri/vga_stats.py), final checkpoints, seeds 42-46."""
+    v = json.loads((FIN / "vga_params.json").read_text())
+    rows = []
+    for d in DS:
+        r = v[d]
+        rows.append(f"{NAME[d]} & {100 * r['beta_pos']:.0f} & {r['beta_median']:.3f} & {r['beta_max']:.2f} & "
+                    f"{r['corr_min']:.2f}--{r['corr_max']:.2f} & ${'-' if r['diag'] < 0 else ''}${abs(r['diag']):.2f} & "
+                    f"${'-' if r['off'] < 0 else ''}${abs(r['off']):.2f} \\\\")
+    hdr = ("& \\multicolumn{3}{c}{$\\beta$} & \\multicolumn{3}{c}{$\\Gamma$} \\\\\n\\cmidrule(lr){2-4}\\cmidrule(lr){5-7}\n"
+           "Dataset & $>0$ (\\%) & Median & Max & Seed corr. & Diagonal & Off-diagonal")
+    note = ("Final checkpoints, seeds 42--46; $\\beta$ over the 3 layers $\\times$ 4 heads of each seed. \\emph{Seed corr.}: "
+            "range of the pairwise correlations between seeds of the off-diagonal entries of $\\Gamma$ (mean over layers "
+            "and heads); \\emph{Diagonal}, \\emph{Off-diagonal}: mean prior of a variable on itself and on the others.")
+    CN_NOTE["vga"] = ("最终模型，seeds 42--46；$\\beta$ 统计每个种子的 3 层 $\\times$ 4 个注意力头。\\emph{种子相关}：$\\Gamma$（对各层与各头取平均）"
+                      "非对角元素在种子两两之间的相关系数范围；\\emph{对角}、\\emph{非对角}：变量对自身与对其他变量的平均先验。")
+    table("vga", "Learned visibility bias.", "tab:vga", hdr, rows, note, "@{}lcccccc@{}", size=10)
+
+
+COMPACT = (energy_table, vga_table, hyper_table, pervar_table, main_compact, length_compact, pattern_compact, factorial_compact, ablation_compact, cost_table)
 
 
 if __name__ == "__main__":

@@ -59,6 +59,7 @@ Crossformer). Tuning decisions used only the ETTh2 and ETTm1 validation splits.
 | `run_saits_block_supervised.py` | SAITS trained on the gap targets |
 | `scripts/va_sri/render_paper.py` | tables and numbers of the paper from the result files |
 | `scripts/va_sri/gap_position.py`, `example_grid.py` | analyses behind Figures 2 and 3 |
+| `scripts/va_sri/residual_energy.py`, `vga_stats.py` | residual-target energy and learned visibility bias (Section 6.6) |
 | `data/`, `models/`, `losses/`, `utils/`, `engine/` | data loading, masks, interpolation and shared modules |
 
 ## Citation
