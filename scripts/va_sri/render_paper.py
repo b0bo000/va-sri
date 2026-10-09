@@ -140,7 +140,7 @@ ZH = {"Method": "方法", "Variant": "变体", "Dataset": "数据集", "Input": 
       "Raw MSE": "原尺度 MSE", "Raw MAE": "原尺度 MAE",
       "w/o visibility bias": "去掉可见性偏置", "w/o variable identity": "去掉变量身份",
       "w/o joint pretraining": "去掉联合预训练", "VA-SRI (full)": "VA-SRI（完整）",
-      "Joint-channel encoder": "联合通道编码器", "Original recipe": "原配方", "Our recipe": "本文配方", "shared gap": "共享缺口", "partial": "部分共享", "mixed": "混合", "independent gaps": "独立缺口", "12 steps": "12 步", "24 steps": "24 步", "48 steps": "48 步", "Std.": "标准化", "Orig.": "原尺度", "Params": "参数量", "Learning rate": "学习率", "Recipe": "配方", "Loss": "损失", "Selected": "选定", "Seeds": "种子", "Lower": "更低", "Largest gain": "最大收益", "Largest loss": "最大损失", "Worse": "更差", "Skel.": "骨架", "Rem.": "消除", "Mean": "均值", "Median": "中位数", "Max": "最大值", "Seed corr.": "种子相关", "Off-diagonal": "非对角", "Diagonal": "对角", "Variable": "变量", "Var. (\\%)": "方差（\\%）", "Wins": "胜出", "Model": "模型", "original": "原配方", "ours": "本文配方", "Train (min)": "训练（分钟）", " (7 variables)": "（7 个变量）", " (21 variables)": "（21 个变量）",
+      "Joint-channel encoder": "联合通道编码器", "Original recipe": "原配方", "Our recipe": "本文配方", "shared gap": "共享缺口", "partial": "部分共享", "mixed": "混合", "independent gaps": "独立缺口", "12 steps": "12 步", "24 steps": "24 步", "48 steps": "48 步", "Std.": "标准化", "Orig.": "原尺度", "Params": "参数量", "Learning rate": "学习率", "Recipe": "配方", "Loss": "损失", "Selected": "选定", "Seeds": "种子", "Seed": "种子", "Earlier": "早期配置", "Standardized MSE": "标准化 MSE", "Original-scale MSE": "原尺度 MSE", "Lower": "更低", "Largest gain": "最大收益", "Largest loss": "最大损失", "Worse": "更差", "Skel.": "骨架", "Rem.": "消除", "Mean": "均值", "Median": "中位数", "Max": "最大值", "Seed corr.": "种子相关", "Off-diagonal": "非对角", "Diagonal": "对角", "Variable": "变量", "Var. (\\%)": "方差（\\%）", "Wins": "胜出", "Model": "模型", "original": "原配方", "ours": "本文配方", "Train (min)": "训练（分钟）", " (7 variables)": "（7 个变量）", " (21 variables)": "（21 个变量）",
       "VA-SRI, same loss": "VA-SRI·相同损失", "SAITS-blocksup, MAE loss": "SAITS-blocksup·MAE 损失", "TimesNet": "TimesNet", "Crossformer": "Crossformer",
       "Method": "方法", "Std. MSE": "标准化 MSE", "Std. MAE": "标准化 MAE", "Linear interpolation": "线性插值"}
 
@@ -158,6 +158,9 @@ CN = {"Imputation error with 24-step gaps (masked MSE).": "缺口长度为 24 �
       "Model size and training time.": "模型规模与训练时间。",
       "Error of the skeleton and of VA-SRI by gap length.": "不同缺口长度下骨架与 VA-SRI 的误差。",
       "Learned visibility bias.": "学习得到的可见性偏置。",
+      "Main comparison per seed.": "主比较的逐种子结果。",
+      "VA-SRI under different training objectives.": "不同训练目标下的 VA-SRI。",
+      "Component ablation under the earlier configuration.": "早期配置下的组件消融。",
       "Per-variable comparison on all datasets.": "全部数据集上的逐变量比较。",
       "Per-variable error on ETTh2 and ETTm2.": "ETTh2 与 ETTm2 上的逐变量误差。",
       "Per-variable error on Weather.": "Weather 上的逐变量误差。",
@@ -952,7 +955,109 @@ def factorial_length_table():
           "@{}llcccccc@{}", size=10)
 
 
-COMPACT = (pervar_summary_table, pervar_appendix_tables, point_table, factorial_length_table, energy_table, vga_table, hyper_table, pervar_table, main_compact, length_compact, pattern_compact, factorial_compact, ablation_compact, cost_table)
+OBJ = (("Earlier", "ft_{d}_s{s}_pre_p2ett_s{s}_beta_g_ema"), ("MSE", "ft_{d}_s{s}_pre_p2ett_s{s}_beta_g_final"),
+       ("MSE + MAE", FINAL))
+
+
+def objective_table():
+    """VA-SRI under three training configurations, test, seeds 42-46."""
+    grid = {(lab, d, m): agg(lambda s: va(p, d, s), S5, m) for lab, p in OBJ for d in DS for m in ("std_mse", "mse")}
+    if any(v is None for v in grid.values()):
+        raise TypeError("objective runs pending")
+    rows = []
+    for d in DS:
+        cells = []
+        for m, dec in (("std_mse", 4), ("mse", "auto")):
+            vals = [grid[(lab, d, m)][0] for lab, _ in OBJ]
+            cells += [f"\\textbf{{{num(v, dec)}}}" if v == min(vals) else num(v, dec) for v in vals]
+        rows.append(f"{NAME[d]} & " + " & ".join(cells) + " \\\\")
+    for m, tag in (("std_mse", "Std"), ("mse", "Orig")):
+        for (la, pa), key in ((OBJ[1], "MaeTerm"), (OBJ[0], "Earlier")):
+            ch = [100 * (va(FINAL, d, s)[m] / va(pa, d, s)[m] - 1) for d in DS for s in S5]
+            MAC[f"obj{key}{tag}"] = f"{st.mean(ch):+.1f}"
+            MAC[f"obj{key}{tag}Wins"] = f"{sum(c < 0 for c in ch)}/{len(ch)}"
+            for d in DS:
+                cd = [100 * (va(FINAL, d, s)[m] / va(pa, d, s)[m] - 1) for s in S5]
+                MAC[f"obj{key}{tag}{NAME[d]}"] = f"{st.mean(cd):+.1f}"
+    hdr = grouped_header("Dataset", ["Standardized MSE", "Original-scale MSE"], ["Earlier", "MSE", "MSE + MAE"])
+    note = ("Test split, mean over seeds 42--46; lowest error per dataset and scale in bold. \\emph{Earlier}: "
+            "variance-weighted MSE, learning rate $3\\times10^{-4}$, epoch selected by the original-scale validation MSE; "
+            "\\emph{MSE}: plain MSE on standardized values, learning rate $10^{-3}$, epoch selected by the standardized "
+            "validation MSE; \\emph{MSE + MAE}: the final configuration (Eq.~\\eqref{eq:loss}). All other settings are identical.")
+    CN_NOTE["objective"] = ("测试集，seeds 42--46 的均值；每个数据集与尺度上误差最低者加粗。\\emph{早期配置}：方差加权 MSE，学习率 $3\\times10^{-4}$，"
+                            "按原尺度验证 MSE 选择轮次；\\emph{MSE}：标准化数值上的普通 MSE，学习率 $10^{-3}$，按标准化验证 MSE 选择轮次；"
+                            "\\emph{MSE + MAE}：最终配置（式~\\eqref{eq:loss}）。其余设置完全相同。")
+    table("objective", "VA-SRI under different training objectives.", "tab:objective", hdr, rows, note,
+          "@{}l" + "ccc" * 2 + "@{}", size=10)
+
+
+ABL_EARLY = (("VA-SRI (full)", "ft_{d}_s{s}_pre_p2ett_s{s}_beta_g_ema"),
+             ("w/o visibility bias", "ft_{d}_s{s}_pre_p2ett_s{s}_off_ema_abl"),
+             ("w/o variable identity", "ft_{d}_s{s}_pre_p2ett_s{s}_beta_g_ema_noid_abl"),
+             ("w/o joint pretraining", "ft_{d}_s{s}_none_beta_g_ema_abl"))
+
+
+def ablation_early_table():
+    cols = []
+    for d in DS:
+        col = []
+        for _, p in ABL_EARLY:
+            a = agg(lambda s: va(p, d, s), S3, "std_mse")
+            if a is None:
+                raise TypeError("early ablation pending")
+            col.append(a[0])
+        cols.append(col)
+    fc = ranked(cols, [4] * len(DS))
+    rows = []
+    for i, (lab, p) in enumerate(ABL_EARLY):
+        if i == 0:
+            r = "--"
+        else:
+            ch = [100 * (va(p, d, s)["std_mse"] / va(ABL_EARLY[0][1], d, s)["std_mse"] - 1) for d in DS for s in S3]
+            r = f"${'+' if st.mean(ch) >= 0 else '-'}${abs(st.mean(ch)):.1f}"
+            key = {"w/o visibility bias": "Vga", "w/o variable identity": "Id", "w/o joint pretraining": "Pre"}[lab]
+            MAC[f"ablEarly{key}"] = f"{st.mean(ch):+.1f}"
+            MAC[f"ablEarly{key}Worse"] = f"{sum(c > 0 for c in ch)}/{len(ch)}"
+            for d in DS:
+                cd = [100 * (va(p, d, s)["std_mse"] / va(ABL_EARLY[0][1], d, s)["std_mse"] - 1) for s in S3]
+                MAC[f"ablEarly{key}{NAME[d]}"] = f"{st.mean(cd):+.1f}"
+        rows.append(f"{lab} & " + " & ".join(c[i] for c in fc) + f" & {r} \\\\")
+    rows.insert(1, "\\midrule")
+    hdr = "Variant & " + " & ".join(NAME[d] for d in DS) + " & $\\Delta$ (\\%)"
+    note = ("Standardized test MSE, mean over seeds 42--44, under the earlier configuration of Table~\\ref{tab:objective} "
+            "(variance-weighted MSE). Each row removes one component; $\\Delta$: mean relative change over the 15 "
+            "dataset--seed pairs. Best in bold, second best underlined.")
+    CN_NOTE["ablationearly"] = ("标准化测试 MSE，seeds 42--44 的均值，采用表~\\ref{tab:objective} 中的早期配置（方差加权 MSE）。每行移除一个组件；"
+                                "$\\Delta$：15 组数据集—种子组合上的平均相对变化。最优加粗，次优加下划线。")
+    table("ablationearly", "Component ablation under the earlier configuration.", "tab:ablationearly", hdr, rows, note,
+          "@{}l" + "c" * len(DS) + "c@{}", size=10)
+
+
+def perseed_table():
+    """Main comparison per seed: VA-SRI vs tuned SAITS-blocksup, both scales, test."""
+    rows = []
+    for d in DS:
+        for k, sd in enumerate(S5):
+            a, b = G_VA(d)(sd), G_SP(d)(sd)
+            if a is None or b is None:
+                raise TypeError("per-seed pending")
+            cells = []
+            for m, dec in (("std_mse", 4), ("mse", "auto")):
+                rel = 100 * (a[m] / b[m] - 1)
+                cells += [f"\\textbf{{{num(a[m], dec)}}}" if a[m] < b[m] else num(a[m], dec),
+                          f"\\textbf{{{num(b[m], dec)}}}" if b[m] < a[m] else num(b[m], dec),
+                          f"${'+' if rel >= 0 else '-'}${abs(rel):.1f}"]
+            rows.append(f"{NAME[d] if k == 0 else ''} & {sd} & " + " & ".join(cells) + " \\\\")
+        rows.append("\\midrule")
+    rows = rows[:-1]
+    hdr = grouped_header("Dataset & Seed", ["Standardized MSE", "Original-scale MSE"], ["VA-SRI", "SAITS", "$\\Delta$ (\\%)"])
+    note = ("Test split, 24-step gaps; SAITS-blocksup with its tuned setting. Both methods use the same masks in each "
+            "seed; the lower error is in bold, and $\\Delta$ is the relative difference of VA-SRI.")
+    CN_NOTE["perseed"] = "测试集，24 步缺口；SAITS-blocksup 采用调参后的设置。两种方法在每个种子下使用相同的掩码；较低误差加粗，$\\Delta$ 为 VA-SRI 的相对差异。"
+    table("perseed", "Main comparison per seed.", "tab:perseed", hdr, rows, note, "@{}ll" + "ccc" * 2 + "@{}", size=9.5)
+
+
+COMPACT = (perseed_table, objective_table, ablation_early_table, pervar_summary_table, pervar_appendix_tables, point_table, factorial_length_table, energy_table, vga_table, hyper_table, pervar_table, main_compact, length_compact, pattern_compact, factorial_compact, ablation_compact, cost_table)
 
 
 if __name__ == "__main__":
