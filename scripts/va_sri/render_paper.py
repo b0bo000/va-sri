@@ -140,7 +140,7 @@ ZH = {"Method": "方法", "Variant": "变体", "Dataset": "数据集", "Input": 
       "Raw MSE": "原尺度 MSE", "Raw MAE": "原尺度 MAE",
       "w/o visibility bias": "去掉可见性偏置", "w/o variable identity": "去掉变量身份",
       "w/o joint pretraining": "去掉联合预训练", "VA-SRI (full)": "VA-SRI（完整）",
-      "Joint-channel encoder": "联合通道编码器", "Original recipe": "原配方", "Our recipe": "本文配方", "shared gap": "共享缺口", "partial": "部分共享", "mixed": "混合", "independent gaps": "独立缺口", "12 steps": "12 步", "24 steps": "24 步", "48 steps": "48 步", "Std.": "标准化", "Orig.": "原尺度", "Params": "参数量", "Learning rate": "学习率", "Recipe": "配方", "Loss": "损失", "Selected": "选定", "Seeds": "种子", "Skel.": "骨架", "Rem.": "消除", "Mean": "均值", "Median": "中位数", "Max": "最大值", "Seed corr.": "种子相关", "Off-diagonal": "非对角", "Diagonal": "对角", "Variable": "变量", "Var. (\\%)": "方差（\\%）", "Wins": "胜出", "Model": "模型", "original": "原配方", "ours": "本文配方", "Train (min)": "训练（分钟）", " (7 variables)": "（7 个变量）", " (21 variables)": "（21 个变量）",
+      "Joint-channel encoder": "联合通道编码器", "Original recipe": "原配方", "Our recipe": "本文配方", "shared gap": "共享缺口", "partial": "部分共享", "mixed": "混合", "independent gaps": "独立缺口", "12 steps": "12 步", "24 steps": "24 步", "48 steps": "48 步", "Std.": "标准化", "Orig.": "原尺度", "Params": "参数量", "Learning rate": "学习率", "Recipe": "配方", "Loss": "损失", "Selected": "选定", "Seeds": "种子", "Lower": "更低", "Largest gain": "最大收益", "Largest loss": "最大损失", "Worse": "更差", "Skel.": "骨架", "Rem.": "消除", "Mean": "均值", "Median": "中位数", "Max": "最大值", "Seed corr.": "种子相关", "Off-diagonal": "非对角", "Diagonal": "对角", "Variable": "变量", "Var. (\\%)": "方差（\\%）", "Wins": "胜出", "Model": "模型", "original": "原配方", "ours": "本文配方", "Train (min)": "训练（分钟）", " (7 variables)": "（7 个变量）", " (21 variables)": "（21 个变量）",
       "VA-SRI, same loss": "VA-SRI·相同损失", "SAITS-blocksup, MAE loss": "SAITS-blocksup·MAE 损失", "TimesNet": "TimesNet", "Crossformer": "Crossformer",
       "Method": "方法", "Std. MSE": "标准化 MSE", "Std. MAE": "标准化 MAE", "Linear interpolation": "线性插值"}
 
@@ -158,6 +158,11 @@ CN = {"Imputation error with 24-step gaps (masked MSE).": "缺口长度为 24 �
       "Model size and training time.": "模型规模与训练时间。",
       "Error of the skeleton and of VA-SRI by gap length.": "不同缺口长度下骨架与 VA-SRI 的误差。",
       "Learned visibility bias.": "学习得到的可见性偏置。",
+      "Per-variable comparison on all datasets.": "全部数据集上的逐变量比较。",
+      "Per-variable error on ETTh2 and ETTm2.": "ETTh2 与 ETTm2 上的逐变量误差。",
+      "Per-variable error on Weather.": "Weather 上的逐变量误差。",
+      "Random point missingness at different rates.": "不同缺失率下的随机点缺失。",
+      "Skeleton input and residual output at different gap lengths.": "不同缺口长度下的骨架输入与残差输出。",
       "Tuning candidates and their validation error.": "调参候选及其验证误差。",
       "Per-variable error on ETTh1 and ETTm1.": "ETTh1 与 ETTm1 上的逐变量误差。",
       "Standardized masked MSE, mean $\\pm$ SD.": "标准化掩码 MSE（均值 $\\pm$ 标准差）。",
@@ -746,30 +751,77 @@ def hyper_table():
 ETT_VARS = ("HUFL", "HULL", "MUFL", "MULL", "LUFL", "LULL", "OT")
 
 
-def pervar_table():
-    """Per-variable original-scale MAE, VA-SRI vs SAITS-blocksup with its own loss (scripts/va_sri/per_variable.py)."""
-    pv = json.loads((FIN / "per_variable_mae.json").read_text())
-    by = {d: {r["var"]: r for r in pv[d]} for d in ("etth1", "ettm1")}
-    order = sorted(range(7), key=lambda v: -by["etth1"][v]["variance_share"])
+def _pv_names(d):
+    if d.startswith("ett"):
+        return list(ETT_VARS)
+    return [w.split(" (")[0] for w in (ROOT / "data/weather.csv").read_text().splitlines()[0].split(",")[1:]]
+
+
+def _pv_rows(d, order=None):
+    pv = json.loads((FIN / "per_variable_all.json").read_text())[d]
+    t, names = pv["tuned"], _pv_names(d)
+    order = order or sorted(range(len(names)), key=lambda v: -pv["variance_share"][v])
     rows = []
     for v in order:
-        cells = []
-        for d in ("etth1", "ettm1"):
-            r = by[d][v]
-            a, b = r["va_mae"], r["saits_mae"]
-            cells += [f"{100 * r['variance_share']:.1f}", f"\\textbf{{{a:.3f}}}" if a < b else f"{a:.3f}",
-                      f"\\textbf{{{b:.3f}}}" if b < a else f"{b:.3f}", f"${'+' if r['rel'] >= 0 else '-'}${abs(r['rel']):.1f}",
-                      f"{r['wins']}/5"]
-        rows.append(f"{ETT_VARS[v]} & " + " & ".join(cells) + " \\\\")
+        a, b = pv["va"][v], t["mae"][v]
+        dec = 3 if max(a, b) < 10 else 2
+        rows.append([names[v], f"{100 * pv['variance_share'][v]:.1f}",
+                     f"\\textbf{{{a:.{dec}f}}}" if a < b else f"{a:.{dec}f}", f"\\textbf{{{b:.{dec}f}}}" if b < a else f"{b:.{dec}f}",
+                     f"${'+' if t['rel'][v] >= 0 else '-'}${abs(t['rel'][v]):.1f}", f"{t['wins'][v]}/5"])
+    return rows
+
+
+def pervar_table():
+    """Per-variable original-scale MAE, VA-SRI vs tuned SAITS-blocksup (scripts/va_sri/per_variable_all.py)."""
+    order = sorted(range(7), key=lambda v: -json.loads((FIN / "per_variable_all.json").read_text())["etth1"]["variance_share"][v])
+    r1, r2 = _pv_rows("etth1", order), _pv_rows("ettm1", order)
+    rows = [f"{a[0]} & " + " & ".join(a[1:]) + " & " + " & ".join(b[1:]) + " \\\\" for a, b in zip(r1, r2)]
     hdr = grouped_header("Variable", ["ETTh1", "ETTm1"], ["Var. (\\%)", "VA-SRI", "SAITS", "$\\Delta$ (\\%)", "Wins"])
-    note = ("Original-scale test MAE per variable, 24-step gaps, mean over seeds 42--46, against SAITS-blocksup with "
-            "its own MAE loss (the only per-variable error recorded for SAITS). \\emph{Var.}: share of the total "
-            "training variance; $\\Delta$: relative difference of VA-SRI; \\emph{Wins}: seeds in which VA-SRI is lower. "
-            "Variables are sorted by their variance share on ETTh1; the lower error is in bold.")
-    CN_NOTE["pervar"] = ("逐变量原尺度测试 MAE，24 步缺口，seeds 42--46 的均值，对比使用其自身 MAE 损失的 SAITS-blocksup（SAITS 只记录了逐变量的 MAE）。"
+    note = ("Original-scale test MAE per variable, 24-step gaps, mean over seeds 42--46, against tuned SAITS-blocksup "
+            "(SAITS records only per-variable MAE). \\emph{Var.}: share of the total training variance; $\\Delta$: relative "
+            "difference of VA-SRI; \\emph{Wins}: seeds in which VA-SRI is lower. Variables are sorted by their variance "
+            "share on ETTh1; the lower error is in bold.")
+    CN_NOTE["pervar"] = ("逐变量原尺度测试 MAE，24 步缺口，seeds 42--46 的均值，对比调参后的 SAITS-blocksup（SAITS 只记录了逐变量的 MAE）。"
                          "\\emph{方差}：该变量在训练段总方差中的占比；$\\Delta$：VA-SRI 的相对差异；\\emph{胜出}：VA-SRI 误差更低的种子数。"
                          "变量按其在 ETTh1 上的方差占比排序，较低误差加粗。")
     table("pervar", "Per-variable error on ETTh1 and ETTm1.", "tab:pervar", hdr, rows, note, "@{}l" + "ccccc" * 2 + "@{}", size=9.5, colsep=3.5)
+
+
+def pervar_summary_table():
+    pv = json.loads((FIN / "per_variable_all.json").read_text())
+    rows = []
+    for d in DS:
+        t, sh, names = pv[d]["tuned"], pv[d]["variance_share"], _pv_names(d)
+        win = [v for v in range(len(sh)) if t["wins"][v] >= 3]
+        best, worst = min(range(len(sh)), key=lambda v: t["rel"][v]), max(range(len(sh)), key=lambda v: t["rel"][v])
+        f = lambda v: f"{names[v]} (${'+' if t['rel'][v] >= 0 else '-'}${abs(t['rel'][v]):.1f})"
+        rows.append(f"{NAME[d]} & {len(win)}/{len(sh)} & {100 * sum(sh[v] for v in win):.1f} & {f(best)} & {f(worst)} \\\\")
+        MAC[f"pvWin{NAME[d]}"] = f"{len(win)}/{len(sh)}"
+        MAC[f"pvWinShare{NAME[d]}"] = f"{100 * sum(sh[v] for v in win):.1f}"
+    hdr = "Dataset & Lower & Var. (\\%) & Largest gain & Largest loss"
+    note = ("Original-scale test MAE per variable against tuned SAITS-blocksup, 24-step gaps, seeds 42--46. "
+            "\\emph{Lower}: variables on which VA-SRI has the lower MAE in at least three of five seeds; \\emph{Var.}: their "
+            "share of the total training variance; largest gain and loss with the relative difference of VA-SRI (\\%). "
+            "Full per-variable results are in Tables~\\ref{tab:pervar}, \\ref{tab:pervarett} and~\\ref{tab:pervarweather}.")
+    CN_NOTE["pervarsum"] = ("逐变量原尺度测试 MAE，对比调参后的 SAITS-blocksup，24 步缺口，seeds 42--46。\\emph{更低}：在五个种子中至少三个上"
+                            "VA-SRI 的 MAE 更低的变量数；\\emph{方差}：这些变量在训练段总方差中的占比；最大收益与最大损失后括号内为 VA-SRI 的相对差异（\\%）。"
+                            "完整的逐变量结果见表~\\ref{tab:pervar}、表~\\ref{tab:pervarett} 与表~\\ref{tab:pervarweather}。")
+    table("pervarsum", "Per-variable comparison on all datasets.", "tab:pervarsum", hdr, rows, note, "@{}lcccc@{}", size=10)
+
+
+def pervar_appendix_tables():
+    order = sorted(range(7), key=lambda v: -json.loads((FIN / "per_variable_all.json").read_text())["etth2"]["variance_share"][v])
+    r1, r2 = _pv_rows("etth2", order), _pv_rows("ettm2", order)
+    rows = [f"{a[0]} & " + " & ".join(a[1:]) + " & " + " & ".join(b[1:]) + " \\\\" for a, b in zip(r1, r2)]
+    hdr = grouped_header("Variable", ["ETTh2", "ETTm2"], ["Var. (\\%)", "VA-SRI", "SAITS", "$\\Delta$ (\\%)", "Wins"])
+    note = "As Table~\\ref{tab:pervar}, for ETTh2 and ETTm2; variables sorted by their variance share on ETTh2."
+    CN_NOTE["pervarett"] = "同表~\\ref{tab:pervar}，数据集为 ETTh2 与 ETTm2；变量按其在 ETTh2 上的方差占比排序。"
+    table("pervarett", "Per-variable error on ETTh2 and ETTm2.", "tab:pervarett", hdr, rows, note, "@{}l" + "ccccc" * 2 + "@{}", size=9.5, colsep=3.5)
+    rows = [" & ".join(r) + " \\\\" for r in _pv_rows("weather")]
+    hdr = "Variable & Var. (\\%) & VA-SRI & SAITS & $\\Delta$ (\\%) & Wins"
+    note = "As Table~\\ref{tab:pervar}, for the 21 variables of Weather, sorted by variance share."
+    CN_NOTE["pervarweather"] = "同表~\\ref{tab:pervar}，为 Weather 的 21 个变量，按方差占比排序。"
+    table("pervarweather", "Per-variable error on Weather.", "tab:pervarweather", hdr, rows, note, "@{}lccccc@{}", size=9.5)
 
 
 def energy_table():
@@ -816,7 +868,91 @@ def vga_table():
     table("vga", "Learned visibility bias.", "tab:vga", hdr, rows, note, "@{}lcccccc@{}", size=10)
 
 
-COMPACT = (energy_table, vga_table, hyper_table, pervar_table, main_compact, length_compact, pattern_compact, factorial_compact, ablation_compact, cost_table)
+POINT = (0.125, 0.25, 0.375, 0.5)
+
+
+def point_table():
+    """Random point missingness (phase 24): linear interpolation, tuned SAITS-blocksup and VA-SRI, seeds 42-44."""
+    if not (FIN / "point_skeleton.json").exists():
+        raise TypeError("point skeleton pending")
+    sk = json.loads((FIN / "point_skeleton.json").read_text())
+    def get(d, r, s, m):
+        tag = f"pt{int(r * 1000)}"
+        va_ = va("ft_{d}_s{s}_pre_p2ett_s{s}_beta_g_f2_" + tag, d, s)
+        sa_ = saits(f"saits_plain_msemae_{tag}_{d}_s{s}")
+        return (sk[f"{NAME[d]}|{r}|{s}"][m], sa_ and sa_[m], va_ and va_[m])
+    data = {(d, r): [get(d, r, s, "std_mse") for s in S3] for d in DS for r in POINT}
+    if any(v is None for rows in data.values() for row in rows for v in row):
+        raise TypeError("point runs pending")
+    rows = []
+    for d in DS:
+        for k, lab in enumerate(("Linear interpolation", "SAITS-blocksup", "VA-SRI")):
+            cells = []
+            for r in POINT:
+                means = [st.mean(row[j] for row in data[(d, r)]) for j in range(3)]
+                v = means[k]
+                cells.append(f"\\textbf{{{v:.4f}}}" if v == min(means) else f"{v:.4f}")
+            rows.append(f"{NAME[d] if k == 0 else ''} & {lab} & " + " & ".join(cells) + " \\\\")
+        rows.append("\\midrule")
+    rows = rows[:-1]
+    for r in POINT:
+        rel = [100 * (row[2] / row[1] - 1) for d in DS for row in data[(d, r)]]
+        relsk = [100 * (row[2] / row[0] - 1) for d in DS for row in data[(d, r)]]
+        key = {0.125: "A", 0.25: "B", 0.375: "C", 0.5: "D"}[r]
+        MAC[f"ptVsSaits{key}"] = f"{st.mean(rel):+.1f}"
+        MAC[f"ptWinsSaits{key}"] = f"{sum(x < 0 for x in rel)}/{len(rel)}"
+        MAC[f"ptVsSkel{key}"] = f"{st.mean(relsk):+.1f}"
+        MAC[f"ptWinsSkel{key}"] = f"{sum(x < 0 for x in relsk)}/{len(relsk)}"
+    for d in DS:
+        rel = [100 * (row[2] / row[1] - 1) for r in POINT for row in data[(d, r)]]
+        MAC[f"ptVsSaits{NAME[d]}"] = f"{st.mean(rel):+.1f}"
+    hdr = "Dataset & Method & 12.5\\% & 25\\% & 37.5\\% & 50\\%"
+    note = ("Standardized test MSE under random point missingness: each variable has the stated share of its 96 "
+            "steps hidden at random positions. Mean over seeds 42--44; the lowest error per dataset and rate in bold. "
+            "SAITS-blocksup and VA-SRI use their tuned settings from the block setting without retuning.")
+    CN_NOTE["point"] = ("随机点缺失下的标准化测试 MSE：每个变量在 96 步中按所列比例随机隐藏若干时间步。seeds 42--44 的均值；"
+                        "每个数据集与缺失率下误差最低者加粗。SAITS-blocksup 与 VA-SRI 沿用块缺失设定下的调参结果，未重新调参。")
+    table("point", "Random point missingness at different rates.", "tab:point", hdr, rows, note, "@{}llcccc@{}", size=10)
+
+
+def factorial_length_table():
+    """Factorial arms at 12, 24 and 48 steps (phase 25 and the 24-step factorial), seeds 42-44."""
+    def name(d, s, arm, bl):
+        if bl == 24:
+            return f"ft_{d}_s{s}_none_beta_g_f2_{'nopre' if arm == 'e11' else arm}"
+        return f"ft_{d}_s{s}_none_beta_g_f2_{arm}_b{bl}"
+    arms = (("e00", "Zero & Absolute"), ("e10", "Skeleton & Absolute"), ("e01", "Zero & Residual"))
+    res = {}
+    for bl in (12, 24, 48):
+        for arm in ("e00", "e10", "e01", "e11"):
+            for d in DS:
+                for sd in S3:
+                    r = va(name(d, sd, arm, bl), d, sd)
+                    if r is None:
+                        raise TypeError("factorial-length runs pending")
+                    res[(bl, arm, d, sd)] = r["std_mse"]
+    rows = []
+    for arm, lab in arms:
+        cells = []
+        for bl in (12, 24, 48):
+            ch = [100 * (res[(bl, arm, d, sd)] / res[(bl, "e11", d, sd)] - 1) for d in DS for sd in S3]
+            cells += [f"$+${st.mean(ch):.1f}" if st.mean(ch) >= 0 else f"$-${abs(st.mean(ch)):.1f}",
+                      f"{sum(c > 0 for c in ch)}/{len(ch)}"]
+            MAC[f"factLen{arm}{'BShort' if bl == 12 else 'BMid' if bl == 24 else 'BLong'}"] = f"{st.mean(ch):.1f}"
+        rows.append(f"{lab} & " + " & ".join(cells) + " \\\\")
+    with open(FIN.parent / "factorial_length.json", "w") as f:
+        json.dump({f"{bl}|{arm}|{d}|{sd}": v for (bl, arm, d, sd), v in res.items()}, f)
+    hdr = grouped_header("Input & Output", ["12 steps", "24 steps", "48 steps"], ["$\\Delta$ (\\%)", "Worse"])
+    note = ("Increase of the standardized test MSE over the full design (skeleton input, residual output) at each gap "
+            "length, mean over the five datasets and seeds 42--44; \\emph{Worse}: dataset--seed pairs in which the "
+            "reduced design has the higher error. All arms are trained without pretraining, as in Table~\\ref{tab:factorial}.")
+    CN_NOTE["factlen"] = ("各缺口长度下相对完整设计（骨架输入、残差输出）的标准化测试 MSE 增幅，五个数据集与 seeds 42--44 的均值；"
+                          "\\emph{更差}：简化设计误差更高的数据集—种子组合数。各组均不预训练，与表~\\ref{tab:factorial} 相同。")
+    table("factlen", "Skeleton input and residual output at different gap lengths.", "tab:factlen", hdr, rows, note,
+          "@{}llcccccc@{}", size=10)
+
+
+COMPACT = (pervar_summary_table, pervar_appendix_tables, point_table, factorial_length_table, energy_table, vga_table, hyper_table, pervar_table, main_compact, length_compact, pattern_compact, factorial_compact, ablation_compact, cost_table)
 
 
 if __name__ == "__main__":
