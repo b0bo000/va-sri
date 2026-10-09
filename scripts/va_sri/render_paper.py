@@ -540,7 +540,7 @@ def main_compact():
         out += [[(a[0] if (a := agg(g(d), S5, metric)) else None) for d in DS] for _, g in tail]
         out.append([(a[0] if (a := agg(lambda s: LIN[NAME[d]][str(s)], S5, metric)) else None) for d in DS])
         return out
-    labels = ["VA-SRI", "SAITS-blocksup", "SAITS-blocksup$^{\\dagger}$"] + OTHERS + [m for m, _ in tail] + ["Linear interpolation"]
+    labels = ["VA-SRI", "SAITS-blocksup", "SAITS-blocksup$^{\\mathrm{a}}$"] + OTHERS + [m for m, _ in tail] + ["Linear interpolation"]
     std, raw = series("std_mse", "std_mse_table_en.tex"), series("mse", "main_table_en.tex")
     cols = []
     for j in range(len(DS)):
@@ -551,12 +551,12 @@ def main_compact():
     hdr = grouped_header("Method", [NAME[d] for d in DS], ["Std.", "Orig."])
     note = ("Masked MSE, block length 24, test split, mean over seeds 42--46 (SDs in Tables~\\ref{tab:mainsd} "
             "and~\\ref{tab:rawmse}). \\emph{Std.}: standardized scale (primary metric); \\emph{Orig.}: original scale. "
-            "Best in bold, second best underlined. $^{\\dagger}$Trained with its own MAE loss. VA-SRI and both SAITS rows share one tuning "
+            "Best in bold, second best underlined. $^{\\mathrm{a}}$Trained with its own MAE loss. VA-SRI and both SAITS rows share one tuning "
             "budget (Section~\\ref{sec:tuning}); TimesNet and Crossformer use our protocol and loss with a tuned learning "
             "rate; ImputeFormer and the \\emph{-strict} baselines use fixed settings (\\ref{app:settings}). Linear "
             "interpolation is the skeleton $S$.")
     CN_NOTE["main"] = ("掩码 MSE，块长 24，测试集，seeds 42--46 的均值（标准差见表~\\ref{tab:mainsd} 与表~\\ref{tab:rawmse}）。"
-                       "\\emph{标准化}：标准化尺度（主指标）；\\emph{原尺度}：原始量纲。最优加粗，次优加下划线。$^{\\dagger}$使用其自身的 MAE 损失训练。VA-SRI 与两行 SAITS"
+                       "\\emph{标准化}：标准化尺度（主指标）；\\emph{原尺度}：原始量纲。最优加粗，次优加下划线。$^{\\mathrm{a}}$使用其自身的 MAE 损失训练。VA-SRI 与两行 SAITS"
                        "共用同一份调参预算（第~\\ref{sec:tuning} 节）；TimesNet 与 Crossformer 采用本文协议与损失并调过学习率；"
                        "ImputeFormer 与 \\emph{-strict} 基线使用固定设置（\\ref{app:settings}）。线性插值即骨架 $S$。")
     ctable("main", "Imputation error with 24-step gaps (masked MSE).", "tab:main", hdr, rows, note,
@@ -740,7 +740,7 @@ def hyper_table():
     hdr = "Model & Learning rate & Recipe & Loss & Seeds & ETTh2 & ETTm1 & Selected"
     note = ("Standardized validation MSE, mean over the stated seeds; the test splits were not used. The selected "
             "setting has the lowest sum over the two datasets. For SAITS, the learning rate and recipe were chosen "
-            "with seeds 42--43 and its own loss (parenthesised tick), and the loss was then chosen for that setting "
+            "with seeds 42--43 and its own loss (tick in parentheses), and the loss was then chosen for that setting "
             "with all five seeds. \\emph{Original} recipe: 100 epochs with early stopping "
             "(patience 20); \\emph{ours}: fixed budget with weight averaging. The SAITS loss is its two-term objective "
             "with the stated error. VA-SRI was tuned one factor at a time (learning rate, then the weight of the "
